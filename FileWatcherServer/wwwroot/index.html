@@ -1,0 +1,376 @@
+﻿<!DOCTYPE html>
+<html lang="vi" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Watcher Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2d3748
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 4px
+        }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: #718096
+            }
+
+        .table-cell {
+            padding: 10px 12px
+        }
+        /* truncate giữa */
+        .mid-ellipsis {
+            max-width: 56rem;
+            display: inline-block;
+            vertical-align: bottom;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body class="h-full text-gray-200 font-sans antialiased">
+    <div class="flex flex-col h-screen max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Header -->
+        <header class="flex justify-between items-center pb-4 border-b border-gray-700">
+            <div>
+                <h1 class="text-2xl font-bold text-white">File Watcher Dashboard</h1>
+                <p class="text-sm text-gray-400">Giám sát sự kiện file theo thời gian thực (có hỗ trợ Blockchain)</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span id="status-text" class="text-xs font-medium text-red-400 mr-2">Đã ngắt kết nối</span>
+                <span class="relative flex h-3 w-3">
+                    <span id="status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span id="status-dot" class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="mt-4">
+            <div class="sm:hidden">
+                <label for="tabs" class="sr-only">Select a tab</label>
+                <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-600 bg-gray-800 text-white focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="realtime" selected>Real-time</option>
+                    <option value="history">Lịch sử (Blockchain)</option>
+                </select>
+            </div>
+            <div class="hidden sm:block">
+                <nav class="flex flex-wrap gap-2" aria-label="Tabs">
+                    <button id="tab-realtime" class="tab-btn px-3 py-2 font-medium text-sm rounded-md bg-gray-700 text-white">Real-time</button>
+                    <button id="tab-history" class="tab-btn px-3 py-2 font-medium text-sm rounded-md text-gray-400 hover:text-white">Lịch sử (Blockchain)</button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <main class="flex-1 overflow-y-auto mt-4">
+
+            <!-- REALTIME -->
+            <section id="content-realtime" class="tab-content">
+                <div class="bg-gray-800 shadow-lg rounded-lg overflow-hidden">
+                    <!-- controls -->
+                    <div class="p-4 border-b border-gray-700 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm text-gray-400">Lọc:</label>
+                            <select id="realtime-filter" class="px-2 py-1 rounded bg-gray-700 text-sm">
+                                <option value="ALL" selected>Tất cả</option>
+                                <option value="CREATED">CREATED</option>
+                                <option value="CHANGED">CHANGED</option>
+                                <option value="RENAMED">RENAMED</option>
+                                <option value="DELETED">DELETED</option>
+                                <option value="DIR">Thư mục (DIR)</option>
+                            </select>
+                        </div>
+                        <input id="realtime-search" placeholder="Tìm theo path / hash / client…" class="w-full sm:w-80 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-700">
+                                <tr>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Loại</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Client</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Đường dẫn</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Hash (SHA256)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="realtime-events-table" class="bg-gray-800 divide-y divide-gray-700">
+                                <tr id="realtime-placeholder"><td colspan="4" class="table-cell text-center text-gray-500">Đang chờ sự kiện…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- HISTORY -->
+            <section id="content-history" class="tab-content hidden">
+                <div class="bg-gray-800 shadow-lg rounded-lg overflow-hidden">
+                    <div class="p-4 border-b border-gray-700 flex flex-col sm:flex-row justify-between gap-3 sm:items-center">
+                        <div>
+                            <h3 class="text-lg font-semibold">Lịch sử sự kiện (Đã xác thực)</h3>
+                            <p class="text-sm text-gray-400">Dữ liệu lấy từ các block đã “đúc”.</p>
+                        </div>
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <input id="history-search" placeholder="Tìm path / hash / client…" class="flex-1 sm:flex-none w-full sm:w-72 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white focus:ring-indigo-500 focus:border-indigo-500">
+                            <button id="btn-history-reload" class="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-500">Tải lại</button>
+                            <a href="/api/export/csv" target="_blank" class="px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-500">Export CSV</a>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-700">
+                            <thead class="bg-gray-700 sticky top-0">
+                                <tr>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Thời gian</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Loại</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Client</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Đường dẫn</th>
+                                    <th class="table-cell text-left text-xs font-medium text-gray-300 uppercase">Hash (SHA256)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-events-table" class="bg-gray-800 divide-y divide-gray-700">
+                                <tr id="history-placeholder"><td colspan="5" class="table-cell text-center text-gray-500">Chưa tải lịch sử…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- SignalR client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        // ------------------- helpers UI -------------------
+        const $ = (sel) => document.querySelector(sel);
+        const statusText = $('#status-text');
+        const statusPing = $('#status-ping');
+        const statusDot = $('#status-dot');
+
+        const realtimeTable = $('#realtime-events-table');
+        const realtimePlaceholder = $('#realtime-placeholder');
+        const realtimeSearch = $('#realtime-search');
+        const realtimeFilter = $('#realtime-filter');
+
+        const historyTable = $('#history-events-table');
+        const historyPlaceholder = $('#history-placeholder');
+        const historySearch = $('#history-search');
+
+        const tabsSelect = $('#tabs');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        let realtimeEvents = [];   // cache để filter realtime
+        let historyCache = [];     // cache cho history
+        let currentTab = 'realtime';
+
+        const hubUrl = "/notifyHub";
+
+        // chip theo loại sự kiện
+        function typeChip(type) {
+            const map = {
+                CREATED: 'bg-green-700 text-green-100',
+                CHANGED: 'bg-yellow-700 text-yellow-100',
+                RENAMED: 'bg-blue-700 text-blue-100',
+                DELETED: 'bg-red-700 text-red-100',
+                DIR: 'bg-slate-700 text-slate-100'
+            };
+            const color = map[type] || 'bg-gray-700 text-gray-100';
+            const icon = {
+                CREATED: '🟢', CHANGED: '🟡', RENAMED: '🔵', DELETED: '🔴', DIR: '📁'
+            }[type] || '📄';
+            return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${color}"><span>${icon}</span>${type}</span>`;
+        }
+
+        function renderHashCell(ev) {
+            let label = ev.fileHash || 'N/A';
+            let chip = '';
+            if (label === 'DIR') chip = '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-slate-700 text-slate-200">DIR</span>';
+            else if (label === 'TOO-LARGE') chip = '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-orange-700 text-white">TOO-LARGE</span>';
+            else if (label === 'LOCKED' || label === 'ERROR')
+                chip = '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-red-700 text-white">LOCKED</span>';
+            const shortHash = label && label.length > 12 ? (label.substring(0, 12) + '…') : label;
+            const safe = (label || '').replaceAll('"', '&quot;');
+            return `
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono text-gray-400" title="${safe}">${shortHash}</span>
+              ${chip}
+              <button class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600"
+                      onclick="navigator.clipboard.writeText('${safe}')">Copy</button>
+            </div>`;
+        }
+
+        function renderPathCell(ev) {
+            const old = ev.oldFilePath ? ` <span class="text-gray-500">(từ ${ev.oldFilePath})</span>` : '';
+            const safe = (ev.filePath || '').replaceAll('"', '&quot;');
+            return `<span class="mid-ellipsis" title="${safe}">${ev.filePath}</span>${old}`;
+        }
+
+        function eventMatchesFilter(ev) {
+            // filter type
+            const f = realtimeFilter.value;
+            if (f !== 'ALL') {
+                if (f === 'DIR' && ev.fileHash !== 'DIR') return false;
+                if (f !== 'DIR' && ev.eventType !== f) return false;
+            }
+            // search
+            const q = realtimeSearch.value.trim().toLowerCase();
+            if (!q) return true;
+            return (ev.filePath?.toLowerCase().includes(q))
+                || (ev.oldFilePath?.toLowerCase().includes(q))
+                || (ev.clientId?.toLowerCase().includes(q))
+                || (ev.fileHash?.toLowerCase().includes(q));
+        }
+
+        function pushRealtimeRow(ev) {
+            if (realtimePlaceholder) realtimePlaceholder.style.display = 'none';
+            const tr = document.createElement('tr');
+            tr.className = 'bg-gray-800 hover:bg-gray-700 transition-colors duration-150';
+            tr.innerHTML = `
+            <td class="table-cell">${typeChip(ev.eventType === 'RENAMED' && ev.fileHash === 'DIR' ? 'DIR' : ev.eventType)}</td>
+            <td class="table-cell text-sm text-gray-400">${ev.clientId}</td>
+            <td class="table-cell text-sm">${renderPathCell(ev)}</td>
+            <td class="table-cell">${renderHashCell(ev)}</td>
+          `;
+            tr.dataset.payload = JSON.stringify(ev); // phục vụ filter lại
+            realtimeTable.prepend(tr);
+        }
+
+        function refilterRealtime() {
+            // clear & render lại từ cache
+            realtimeTable.innerHTML = '';
+            const data = realtimeEvents.filter(eventMatchesFilter);
+            if (data.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="4" class="table-cell text-center text-gray-500">Không có kết quả.</td>`;
+                realtimeTable.appendChild(tr);
+                return;
+            }
+            for (const ev of data) {
+                pushRealtimeRow(ev);
+            }
+        }
+
+        // ------------------- SignalR -------------------
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl(hubUrl)
+            .withAutomaticReconnect()
+            .build();
+
+        function updateStatus(isConnected, text) {
+            statusText.textContent = text;
+            statusPing.className = isConnected
+                ? 'animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'
+                : 'animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75';
+            statusDot.className = isConnected
+                ? 'relative inline-flex rounded-full h-3 w-3 bg-green-500'
+                : 'relative inline-flex rounded-full h-3 w-3 bg-red-500';
+        }
+
+        connection.onreconnecting(() => updateStatus(false, 'Đang kết nối lại…'));
+        connection.onreconnected(() => updateStatus(true, 'Đã kết nối'));
+        connection.onclose(() => updateStatus(false, 'Đã ngắt kết nối'));
+
+        connection.on("ReceiveNewEvent", (ev) => {
+            realtimeEvents.unshift(ev);            // cache
+            if (eventMatchesFilter(ev)) pushRealtimeRow(ev);
+        });
+
+        async function start() {
+            try {
+                await connection.start();
+                updateStatus(true, 'Đã kết nối');
+            } catch (err) {
+                updateStatus(false, 'Lỗi kết nối');
+                setTimeout(start, 5000);
+            }
+        }
+
+        // ------------------- History -------------------
+        async function loadHistory() {
+            historyPlaceholder.innerHTML = '<td colspan="5" class="table-cell text-center text-gray-500">Đang tải lịch sử…</td>';
+            historyTable.innerHTML = '';
+            historyTable.appendChild(historyPlaceholder);
+            try {
+                const res = await fetch('/api/history');
+                if (!res.ok) throw new Error('Fetch /api/history lỗi');
+                historyCache = await res.json();
+                renderHistory(historyCache);
+            } catch (e) {
+                historyPlaceholder.innerHTML = '<td colspan="5" class="table-cell text-center text-red-400">Tải lịch sử thất bại.</td>';
+                console.error(e);
+            }
+        }
+
+        function renderHistory(events) {
+            historyTable.innerHTML = '';
+            if (!events.length) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="5" class="table-cell text-center text-gray-500">Không có dữ liệu.</td>`;
+                historyTable.appendChild(tr);
+                return;
+            }
+            for (const ev of events) {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-gray-800 hover:bg-gray-700 transition-colors duration-150';
+                tr.innerHTML = `
+              <td class="table-cell text-xs text-gray-400">${new Date(ev.timestamp).toLocaleString()}</td>
+              <td class="table-cell">${typeChip(ev.eventType === 'RENAMED' && ev.fileHash === 'DIR' ? 'DIR' : ev.eventType)}</td>
+              <td class="table-cell text-sm text-gray-400">${ev.clientId}</td>
+              <td class="table-cell text-sm">${renderPathCell(ev)}</td>
+              <td class="table-cell">${renderHashCell(ev)}</td>
+            `;
+                historyTable.appendChild(tr);
+            }
+        }
+
+        function filterHistory() {
+            const q = historySearch.value.trim().toLowerCase();
+            if (!q) { renderHistory(historyCache); return; }
+            const filtered = historyCache.filter(ev =>
+                ev.filePath?.toLowerCase().includes(q) ||
+                ev.oldFilePath?.toLowerCase().includes(q) ||
+                ev.clientId?.toLowerCase().includes(q) ||
+                ev.fileHash?.toLowerCase().includes(q) ||
+                new Date(ev.timestamp).toLocaleString().toLowerCase().includes(q)
+            );
+            renderHistory(filtered);
+        }
+
+        // ------------------- Tabs & events -------------------
+        function switchTab(tab) {
+            currentTab = tab;
+            tabBtns.forEach(btn => {
+                if (btn.id === `tab-${tab}`) { btn.classList.add('bg-gray-700', 'text-white'); btn.classList.remove('text-gray-400', 'hover:text-white'); }
+                else { btn.classList.remove('bg-gray-700', 'text-white'); btn.classList.add('text-gray-400', 'hover:text-white'); }
+            });
+            tabsSelect.value = tab;
+            tabContents.forEach(c => c.id === `content-${tab}` ? c.classList.remove('hidden') : c.classList.add('hidden'));
+            if (tab === 'history' && historyCache.length === 0) { loadHistory(); }
+        }
+
+        $('#tab-realtime').addEventListener('click', () => switchTab('realtime'));
+        $('#tab-history').addEventListener('click', () => switchTab('history'));
+        tabsSelect.addEventListener('change', e => switchTab(e.target.value));
+
+        // filters
+        realtimeSearch.addEventListener('input', refilterRealtime);
+        realtimeFilter.addEventListener('change', refilterRealtime);
+        historySearch.addEventListener('input', filterHistory);
+        $('#btn-history-reload').addEventListener('click', loadHistory);
+
+        // init
+        start();
+    </script>
+</body>
+</html>
