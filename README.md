@@ -1,42 +1,39 @@
 # BTL_FileWatcher_Blockchain_Telegram
 
-Giám sát thay đổi file **thời gian thực** trên Windows, hiển thị trên **dashboard web**, lưu vết kiểu **hash-chain (blockchain mini)** để chống sửa log, và **gửi cảnh báo Telegram** cho sự kiện quan trọng.
+Giám sát thay đổi file **thời gian thực** trên Windows, hiển thị trên **dashboard web**, lưu vết theo kiểu **hash-chain (blockchain mini)** để hạn chế sửa log, và **gửi cảnh báo Telegram** cho sự kiện quan trọng.
 
-> Demo: tạo/sửa/đổi tên/xoá file trong thư mục theo dõi → thấy realtime trên web, sau ~15s vào tab **Lịch sử** để xem các sự kiện đã “đúc block”, Telegram sẽ ting khi rename/delete.
-
----
-
-## ✨ Tính năng chính
-- **Realtime**: Client đẩy sự kiện `CREATED / CHANGED / RENAMED / DELETED` qua SignalR.
-- **Mọi định dạng + Thư mục**: Theo dõi *mọi file* và cả **folder** (hash = `DIR`).
-- **Hash SHA-256** (streaming). File quá lớn → gắn nhãn `TOO-LARGE`, file bị khóa → `LOCKED`.
-- **Blockchain mini**: Gom sự kiện định kỳ (~15s) vào block; `Hash = SHA256(timestamp + previousHash + data)`.
-- **Dashboard**: Tab **Real-time** (lọc/tìm), tab **Lịch sử** (immutable, Export CSV).
-- **Telegram alert**: Ping ngay khi `RENAMED/DELETED` (gộp `CHANGED` để tránh spam).
-- **Windows Service (tùy chọn)**: Server/Client có thể chạy nền, tự khởi động cùng Windows.
-- **`.watchignore`**: Loại rác/đường dẫn hệ thống.
+> Demo nhanh: tạo/sửa/đổi tên/xoá file trong thư mục theo dõi → tab **Real-time** hiển thị ngay; ~15s sau vào tab **Lịch sử** để thấy sự kiện đã “đúc block”; Telegram ting khi **RENAMED/DELETED** (và gộp **CHANGED** để tránh spam).
 
 ---
 
-## 🧱 Kiến trúc nhanh
+## ✨ Tính năng
+- Realtime 4 loại sự kiện: `CREATED / CHANGED / RENAMED / DELETED`.
+- Theo dõi **mọi loại file** và **thư mục** (hash thư mục = `DIR`).
+- Hash **SHA-256** (streaming); file lớn gắn nhãn `TOO-LARGE`, file bị khóa → `LOCKED`.
+- **Blockchain mini**: gom sự kiện ~15s/block; `Hash = SHA256(timestamp + previousHash + data)`.
+- **Dashboard web** (Tailwind + JS): Real-time, Lịch sử (immutable), **Export CSV**.
+- **Telegram alert**: gửi ngay khi rename/delete; batch đối với change.
+- Hỗ trợ chạy **Windows Service** (server & client).
+- **`.watchignore`** để loại rác/đường dẫn hệ thống.
 
+---
+
+## 🧱 Kiến trúc
+```
 Client (FileSystemWatcher) --SignalR--> Server (ASP.NET Core)
-| |
-Hash SHA-256 + debounce EF Core + SQLite
-Block creation (hash-chain)
-Dashboard (Tailwind/JS)
-/api/history, /api/export/csv
-Telegram (bot → chat / group)
-
-yaml
-Sao chép mã
+   |                                        |
+Hash SHA-256 + debounce                 EF Core + SQLite
+                                        Block creation (hash-chain)
+                                        Dashboard (Tailwind/JS)
+/api/history, /api/export/csv           Telegram (bot → chat/group)
+```
 
 ---
 
 ## ✅ Yêu cầu
-- **Windows 10/11**
-- **.NET 8 SDK**: https://dotnet.microsoft.com/en-us/download
-- (Tùy chọn) **Telegram bot** (token + chatId) nếu dùng cảnh báo.
+- Windows 10/11
+- .NET 8 SDK: https://dotnet.microsoft.com/en-us/download
+- (Tuỳ chọn) Telegram bot (token + chat_id) nếu bật cảnh báo.
 
 ---
 
@@ -47,69 +44,63 @@ Sao chép mã
 cd FileWatcherServer
 dotnet restore
 dotnet run
-Mở http://localhost:5000 (dashboard)
+```
+- Mở **http://localhost:5000** (dashboard).
+- Test Telegram (nếu đã cấu hình): **http://localhost:5000/api/alert/test**.
 
-Test bot: http://localhost:5000/api/alert/test (nếu đã cấu hình Telegram)
-
-2) Client (Watcher)
-Mở FileWatcherClient/Worker.cs và kiểm tra:
-
-csharp
-Sao chép mã
-const string WATCH_PATH = @"C:\temp\watch-test";      // thư mục theo dõi
+### 2) Client (Watcher)
+Mở `FileWatcherClient/Worker.cs` và kiểm tra:
+```csharp
+const string WATCH_PATH = @"C:	emp\watch-test";            // thư mục theo dõi
 const string SERVER_URL  = "http://localhost:5000/notifyHub"; // hub server
+```
 Chạy:
-
-bash
-Sao chép mã
+```bash
 cd FileWatcherClient
 dotnet restore
 dotnet run
-Thử nghiệm:
+```
 
-Tạo C:\temp\watch-test\a.txt → Realtime thấy CREATED
+**Thử nhanh**
+- Tạo `C:	emp\watch-test.txt` → Real-time: **CREATED**  
+- Đổi tên `a.txt` → `b.txt` → **RENAMED** (Telegram ting nếu bật)  
+- Xoá `b.txt` → **DELETED** (Telegram ting)  
+- ~15s sau mở tab **Lịch sử** → **Export CSV**.
 
-Đổi tên a.txt → b.txt → RENAMED (Telegram ting nếu bật)
+---
 
-Xóa b.txt → DELETED (Telegram ting)
+## 🔔 Bật cảnh báo Telegram (tuỳ chọn)
+1. Chat **@BotFather** → tạo bot → lấy **token**.  
+2. Add bot vào group (nếu gửi nhóm) và nhắn **/start** cho bot.  
+3. Lấy **chat_id** (dùng `getUpdates` hoặc bot hiển thị chat id).  
+4. Điền token/chat_id trong **TelegramService** (hoặc qua biến môi trường) của **FileWatcherServer**.  
+5. Chạy server, gọi **/api/alert/test** để kiểm tra.
 
-Sau ~15s sang tab Lịch sử để thấy sự kiện trong block → Export CSV.
+> **Đừng commit token** lên repo public.
 
-🔔 (Tùy chọn) Cảnh báo Telegram
-Tạo bot với @BotFather → nhận token.
+---
 
-Add bot vào group (nếu gửi vào group) và gửi /start cho bot.
-
-Lấy chat_id (dùng getUpdates hoặc bot hiển thị chat id).
-
-Đặt token/chatId trong TelegramService (hoặc biến môi trường) của FileWatcherServer.
-
-Chạy server và mở /api/alert/test để thử.
-
-Không commit token vào repo public.
-
-🖥️ (Tùy chọn) Chạy nền dạng Windows Service
+## 🖥️ Chạy nền dạng Windows Service (tuỳ chọn)
 Publish:
-
-bash
-Sao chép mã
+```bash
 dotnet publish .\FileWatcherServer -c Release -r win-x64 --self-contained false
 dotnet publish .\FileWatcherClient -c Release -r win-x64 --self-contained false
-Cài (PowerShell Admin):
-
-powershell
-Sao chép mã
+```
+Cài (PowerShell/Command Prompt – Run as Admin):
+```powershell
 sc create FileWatcherServer binPath= "C:\Apps\FileWatcherServer\FileWatcherServer.exe" start= auto
 sc start  FileWatcherServer
+
 sc create FileWatcherClient binPath= "C:\Apps\FileWatcherClient\FileWatcherClient.exe" start= auto
 sc start  FileWatcherClient
-Đảm bảo wwwroot nằm cạnh FileWatcherServer.exe (server dùng ContentRootPath = AppContext.BaseDirectory).
+```
+> Nhớ copy **`wwwroot`** cạnh `FileWatcherServer.exe` (server dùng `AppContext.BaseDirectory` làm content root).
 
-🧹 .watchignore (khuyến nghị)
-Tạo file C:\temp\watch-test\.watchignore:
+---
 
-markdown
-Sao chép mã
+## 🧹 `.watchignore` (khuyến nghị)
+Tạo `C:	emp\watch-test\.watchignore`:
+```
 **/Windows/**
 **/Program Files/**
 **/Program Files (x86)/**
@@ -119,9 +110,12 @@ Sao chép mã
 **/bin/**
 **/obj/**
 **/.git/**
-📁 Cấu trúc dự án
-pgsql
-Sao chép mã
+```
+
+---
+
+## 📁 Cấu trúc dự án
+```
 FileWatcherServer/
   Program.cs
   Data/AppDbContext.cs
@@ -136,13 +130,26 @@ FileWatcherClient/
   Program.cs
   Worker.cs            <-- watcher (mọi file + thư mục, hash, debounce)
   IgnoreMatcher.cs     <-- glob ignore
-🧪 Troubleshooting
-Client không kết nối → Kiểm tra SERVER_URL, port 5000, firewall.
+```
 
-Dashboard trắng khi chạy service → Copy wwwroot cạnh .exe.
+---
 
-Không thấy lịch sử → Đợi qua chu kỳ đúc block (~15s) hoặc tạo thêm thao tác.
+## 🧪 Troubleshooting
+- **Client không kết nối** → kiểm tra `SERVER_URL`, port 5000, firewall.  
+- **Dashboard trắng khi chạy service** → đảm bảo `wwwroot` nằm cạnh `.exe`.  
+- **Không thấy lịch sử** → đợi chu kỳ đúc block (~15s) hoặc phát sinh thêm sự kiện.  
+- **Telegram không ting** → sai token/chat_id hoặc chưa **/start**; test **/api/alert/test**.  
+- **Hash = `TOO-LARGE` / `LOCKED`** → file lớn/đang bị khoá; thử lại hoặc điều chỉnh giới hạn trong `Worker.cs`.
 
-Telegram không ting → Sai token/chatId hoặc chưa /start; thử /api/alert/test.
+---
 
-Hash = TOO-LARGE / LOCKED → File quá lớn hoặc đang bị app khác khóa; thử lại hoặc tăng giới hạn trong Worker.cs.
+## 📜 License
+MIT License.
+
+---
+
+## 💡 Hướng phát triển
+- Auth/role cho dashboard; lọc lịch sử theo thời gian.  
+- Phân trang hoặc **virtualize** bảng lịch sử (`/api/history?skip=&take=`).  
+- Bổ sung metadata (owner/ACL) & chữ ký số block.  
+- Với file text: gửi kèm **diff** cho sự kiện `CHANGED`.
